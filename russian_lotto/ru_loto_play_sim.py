@@ -1,8 +1,8 @@
 import random
 from copy import deepcopy
 from math import floor
-from ru_loto_cards_std import cards
-from ru_loto_cards_rand import get_random_card
+from russian_lotto.ru_loto_cards_std import cards
+from russian_lotto.ru_loto_cards_rand import get_random_card
 
 
 class Player:
