@@ -162,15 +162,15 @@ class Game:
         print("Welcome to the Battleship game!")
         name = input("Please, introduce yourself: ")
         if name:
-            self.player_1.name = name
-
-        if name.lower() == "iseeeverything":
-            self.cheat()
-            self.player_1.name = "Human"
+            if name.lower() == "iseeeverything":  # cheat code
+                self.cheat()
+                self.player_1.name = "Human"
+            else:
+                self.player_1.name = name
 
         print("If you would like to fill your board manually, type A. If you choose a random layout, type B below")
         option = input("Your choice: ")
-        while option.lower() != "a" and option.lower() != "b":
+        while option and option.lower() != "a" and option.lower() != "b":
             option = input("Please, make a sound choice: ")
 
         if option.lower() == "a":
@@ -186,6 +186,7 @@ class Game:
     @staticmethod
     def draw_board(i: int, board: list):
         """
+        Legend:
         O — empty
         M — missed
         X — hit
@@ -219,11 +220,33 @@ class Game:
                 self.draw_board(i, self.board_1.board_inner)
                 print()
 
-            row, col, orient = input(f"Place a {ship.hp} HP ship: ").split()
-            while not self.ship_fits(int(row), int(col), self.board_1, ship, orient):
-                row, col, orient = input(f"The placement is incorrect, please, try again: ").split()
+            # handle input
+            inp = input(f"Place a {ship.hp} HP ship: ")
 
-            self.board_1.place_ship(ship, int(row), int(col), orient)
+            cond_1 = (
+                    len(inp) == 5 and
+                    inp[0].isdigit() and
+                    inp[2].isdigit() and
+                    inp[1] == inp[3] == " " and
+                    inp[4] in {"v", "h"}
+            )
+            cond_2 = self.ship_fits(int(inp[0]), int(inp[2]), self.board_1, ship, inp[4]) if cond_1 else False
+            while not cond_1 or not cond_2:
+                if not cond_1:
+                    inp = input(f"Your input is incorrect, try again: ")
+                else:
+                    inp = input(f"The placement is unacceptable, try again: ")
+
+                cond_1 = (
+                        len(inp) == 5 and
+                        inp[0].isdigit() and
+                        inp[2].isdigit() and
+                        inp[1] == inp[3] == " " and
+                        inp[4].lower() == "v" or inp[4].lower() == "h"
+                )
+                cond_2 = self.ship_fits(int(inp[0]), int(inp[2]), self.board_1, ship, inp[4]) if cond_1 else False
+
+            self.board_1.place_ship(ship, int(inp[0]), int(inp[2]), inp[4])
 
     def random_placement(self, player: str):
         if player == "human":
@@ -261,9 +284,20 @@ class Game:
                 search_area: dict
         ):
             if order[0][0] == self.player_1:
-                row, col = map(int, input(f"{order[0][0].name}, make your turn: ").split())
-                while not self.board_2.board_outer[row][col] == "O":
-                    row, col = map(int, input(f"{order[0][0].name}, you can't hit this tile, try again: ").split())
+                inp = input(f"{order[0][0].name}, make your turn: ")
+
+                condition_1 = len(inp) == 3 and inp[0].isdigit() and inp[2].isdigit() and inp[1] == " "
+                condition_2 = self.board_2.board_outer[int(inp[0])][int(inp[2])] == "O" if condition_1 else False
+                while not condition_1 or not condition_2:
+                    if not condition_1:
+                        inp = input(f"{order[0][0].name}, your input is incorrect, try again: ")
+                    else:
+                        inp = input(f"{order[0][0].name}, you can't hit this tile, try again: ")
+
+                    condition_1 = len(inp) == 3 and inp[0].isdigit() and inp[2].isdigit() and inp[1] == " "
+                    condition_2 = self.board_2.board_outer[int(inp[0])][int(inp[2])] == "O" if condition_1 else False
+
+                row, col = int(inp[0]), int(inp[2])
             else:
                 print(f"{order[0][0].name} makes its turn...")
                 time.sleep(1.5)

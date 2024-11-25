@@ -6,9 +6,9 @@ import tkinter.ttk as ttk
 
 class Cell:
     FILLED_COLOR_BG = "green"
-    EMPTY_COLOR_BG = "grey"
-    FILLED_COLOR_BORDER = "white"
-    EMPTY_COLOR_BORDER = "white"
+    EMPTY_COLOR_BG = "white"
+    FILLED_COLOR_BORDER = "grey"
+    EMPTY_COLOR_BORDER = "grey"
 
     def __init__(self, master, x, y, size):
         self.master = master
