@@ -5,9 +5,11 @@ import time
 from collections import deque
 from copy import deepcopy
 from datetime import datetime
+from enum import Enum
 
 from colorama import Fore, init as colorama_init, Style
 
+BOARD_SIZE = 10
 AROUND_ALL = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 AROUND_CROSS = ((0, -1), (-1, 0), (0, 1), (1, 0))
 AROUND_SALTIRE = ((-1, -1), (-1, 1), (1, 1), (1, -1))
@@ -33,6 +35,45 @@ COMPUTER_DEFAULT_TARGETS = deque(
 )
 
 colorama_init()
+
+
+class TileState(Enum):
+    """
+    Legend:
+    O — empty or unknown (blue);
+    M — missed (black);
+    X — hit ship part (pink);
+    D — destroyed ship part (red);
+    V — prohibited (black);
+    W — intact ship part (white);
+    any — last turn (yellow).
+    """
+
+    EMPTY = ("O", Fore.BLUE)
+    MISS = ("M", Fore.BLACK)
+    HIT = ("X", Fore.MAGENTA)
+    DEAD = ("D", Fore.RED)
+    SHADOW = ("V", Fore.BLACK)
+    SHIP = ("W", Fore.RESET)
+
+    def __init__(self, char, color):
+        self.char = char
+        self.color = color
+
+    def display(self):
+        return f"{self.color}{self.char}{Style.RESET_ALL}"
+
+    def get_char(self):
+        return self.char
+
+    def __str__(self):
+        return self.char
+
+    def __eq__(self, other):
+        if not isinstance(other, TileState):
+            return NotImplemented
+
+        return self.char == other.char
 
 
 class Player:
@@ -100,9 +141,9 @@ class Ship:
 
 class Board:
     def __init__(self):
-        self.board_ships: list[list[Ship | None]] = [[None for _ in range(10)] for _ in range(10)]
-        self.board_inner_repr: list[list[str]] = [["O" for _ in range(10)] for _ in range(10)]
-        self.board_outer_repr: list[list[str]] = [["O" for _ in range(10)] for _ in range(10)]
+        self.board_ships: list[list[Ship | None]] = [[None for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+        self.board_inner_repr = [[TileState.EMPTY for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+        self.board_outer_repr = [[TileState.EMPTY for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
     def place_ship(self, *, ship: Ship, row: int, col: int, orientation: str):
         ship.set_orientation(orientation)
@@ -114,23 +155,23 @@ class Board:
 
             ship.add_coordinates((row_coord, col_coord))
             self.set_ship_part(row_coord, col_coord, ship)
-            self.set_inner_tile(row_coord, col_coord, "W")
+            self.set_inner_tile(row_coord, col_coord, TileState.SHIP)
             self.draw_shade(row_coord, col_coord)
 
     def draw_shade(self, row, col):
         for shade_row, shade_col in AROUND_ALL:
             if (
-                0 <= row + shade_row <= 9 and
-                0 <= col + shade_col <= 9 and
-                self.get_inner_repr(row + shade_row, col + shade_col) == "O"
+                0 <= row + shade_row <= BOARD_SIZE - 1 and
+                0 <= col + shade_col <= BOARD_SIZE - 1 and
+                self.get_inner_repr(row + shade_row, col + shade_col) == TileState.EMPTY
             ):
-                self.set_inner_tile(row + shade_row, col + shade_col, "V")
+                self.set_inner_tile(row + shade_row, col + shade_col, TileState.SHADOW)
 
     def clear_shades(self):
-        for i in range(10):
-            for j in range(10):
-                if self.get_inner_repr(i, j) == "V":
-                    self.set_inner_tile(i, j, "O")
+        for i in range(BOARD_SIZE):
+            for j in range(BOARD_SIZE):
+                if self.get_inner_repr(i, j) == TileState.SHADOW:
+                    self.set_inner_tile(i, j, TileState.EMPTY)
 
     def get_ships(self, row=None, col=None):
         if row is None or col is None:
@@ -153,10 +194,10 @@ class Board:
     def set_ship_part(self, row: int, col: int, ship: Ship):
         self.board_ships[row][col] = ship
 
-    def set_inner_tile(self, row: int, col: int, tile: str):
+    def set_inner_tile(self, row: int, col: int, tile: TileState):
         self.board_inner_repr[row][col] = tile
 
-    def set_outer_tile(self, row: int, col: int, tile: str):
+    def set_outer_tile(self, row: int, col: int, tile: TileState):
         self.board_outer_repr[row][col] = tile
 
 
@@ -180,71 +221,47 @@ class Game:
         self.board_2 = Board()
         self.player_1 = Player("Human", self.board_1)
         self.player_2 = Player("Computer", self.board_2)
-
-        self.p1_battleship = Ship(self.player_1, 4)
-        self.p1_cruiser_1 = Ship(self.player_1, 3)
-        self.p1_cruiser_2 = Ship(self.player_1, 3)
-        self.p1_destroyer_1 = Ship(self.player_1, 2)
-        self.p1_destroyer_2 = Ship(self.player_1, 2)
-        self.p1_destroyer_3 = Ship(self.player_1, 2)
-        self.p1_submarine_1 = Ship(self.player_1, 1)
-        self.p1_submarine_2 = Ship(self.player_1, 1)
-        self.p1_submarine_3 = Ship(self.player_1, 1)
-        self.p1_submarine_4 = Ship(self.player_1, 1)
-
-        self.p2_battleship = Ship(self.player_2, 4)
-        self.p2_cruiser_1 = Ship(self.player_2, 3)
-        self.p2_cruiser_2 = Ship(self.player_2, 3)
-        self.p2_destroyer_1 = Ship(self.player_2, 2)
-        self.p2_destroyer_2 = Ship(self.player_2, 2)
-        self.p2_destroyer_3 = Ship(self.player_2, 2)
-        self.p2_submarine_1 = Ship(self.player_2, 1)
-        self.p2_submarine_2 = Ship(self.player_2, 1)
-        self.p2_submarine_3 = Ship(self.player_2, 1)
-        self.p2_submarine_4 = Ship(self.player_2, 1)
-
-        self.human_ships = (
-            self.p1_battleship,
-            self.p1_cruiser_1,
-            self.p1_cruiser_2,
-            self.p1_destroyer_1,
-            self.p1_destroyer_2,
-            self.p1_destroyer_3,
-            self.p1_submarine_1,
-            self.p1_submarine_2,
-            self.p1_submarine_3,
-            self.p1_submarine_4
-        )
-
-        self.computer_ships = (
-            self.p2_battleship,
-            self.p2_cruiser_1,
-            self.p2_cruiser_2,
-            self.p2_destroyer_1,
-            self.p2_destroyer_2,
-            self.p2_destroyer_3,
-            self.p2_submarine_1,
-            self.p2_submarine_2,
-            self.p2_submarine_3,
-            self.p2_submarine_4
-        )
+        self.human_ships = self.create_fleet(self.player_1)
+        self.computer_ships = self.create_fleet(self.player_2)
 
         self.log = Logger(
             f"battleship/logs/game_{str(datetime.now())[:19].replace(' ', '_').replace(':', '_')}.log",
         )
 
     @staticmethod
+    def create_fleet(player) -> list[Ship]:
+        return [
+            Ship(player, 4),
+            Ship(player, 3),
+            Ship(player, 3),
+            Ship(player, 2),
+            Ship(player, 2),
+            Ship(player, 2),
+            Ship(player, 1),
+            Ship(player, 1),
+            Ship(player, 1),
+            Ship(player, 1),
+        ]
+
+    def get_human_ships(self):
+        return self.human_ships
+
+    def get_computer_ships(self):
+        return self.computer_ships
+
+    @staticmethod
     def ship_fits(*, row: int, col: int, board: Board, ship: Ship, orientation: str):
         row_factor, col_factor = (1, 0) if orientation == "v" else (0, 1)
         ship_length = ship.get_length()
 
-        # entirely inside the map
-        if row + (ship_length - 1) * row_factor > 9 or col + (ship_length - 1) * col_factor > 9:
+        too_long = row + (ship_length - 1) * row_factor > BOARD_SIZE - 1
+        too_wide = col + (ship_length - 1) * col_factor > BOARD_SIZE - 1
+        if too_long or too_wide:
             return False
 
         # not overlaps with other ships and their shades
         for i in range(ship_length):
-            if board.get_inner_repr(row + i * row_factor, col + i * col_factor) != "O":
+            if board.get_inner_repr(row + i * row_factor, col + i * col_factor) != TileState.EMPTY:
                 return False
 
         return True
@@ -253,7 +270,7 @@ class Game:
         print(45 * "=")
         print(" C H E A T C O D E ".center(45, "="))
         print(45 * "=")
-        for ship in self.computer_ships:
+        for ship in self.get_computer_ships():
             print(*ship.coordinates)
         print(3 * (45 * "=" + "\n"))
 
@@ -285,46 +302,25 @@ class Game:
         print("The cell that was shot on the last turn will be painted yellow.")
 
     def draw_board_row(self, *, row: int, board: list, is_last: bool, last_row: int | None, last_col: int | None):
-        """
-        Legend:
-        O — empty or unknown (blue)
-        M — missed (black)
-        X — hit ship part (pink)
-        D — destroyed ship part (red)
-        V — prohibited (black)
-        W — intact ship part (white)
-        any — last turn (yellow)
-        """
-
         print(row, end=" ")
         self.log.write(f"{row} ")
-        for col in range(10):
+        for col in range(BOARD_SIZE):
             c = board[row][col]
             if is_last and (row, col) == (last_row, last_col):
-                print(f"{Fore.YELLOW}{Style.BRIGHT}{c}{Style.RESET_ALL}", end=" ")
-            elif c == "O":
-                print(f"{Fore.BLUE}{c}{Style.RESET_ALL}", end=" ")
-            elif c == "M":
-                print(f"{Fore.BLACK}{c}{Style.RESET_ALL}", end=" ")
-            elif c == "X":
-                print(f"{Fore.MAGENTA}{c}{Style.RESET_ALL}", end=" ")
-            elif c == "D":
-                print(f"{Fore.RED}{c}{Style.RESET_ALL}", end=" ")
-            elif c == "V":
-                print(f"{Fore.BLACK}{c}{Style.RESET_ALL}", end=" ")
+                print(f"{Fore.YELLOW}{Style.BRIGHT}{c.get_char()}{Style.RESET_ALL}", end=" ")
             else:
-                print(c, end=" ")
+                print(c.display(), end=" ")
             self.log.write(f"{c} ")
 
     def manual_placement(self):
         print(
             f"{self.player_1.get_name()}, to place a ship, type its head's row and column, and its orientation (v/h), e.g.: 4 6 v"
         )
-        print("Your ships will be marked as W, and their vicinity will be marked as V")
-        for ship in self.human_ships:
+        print("Your ships will be marked as W, and their shadows will be marked as V")
+        for ship in self.get_human_ships():
             print(f"{Fore.GREEN}Your field{Style.RESET_ALL}")
             print("  0 1 2 3 4 5 6 7 8 9")
-            for i in range(10):
+            for i in range(BOARD_SIZE):
                 self.draw_board_row(
                     row=i,
                     board=self.board_1.board_inner_repr,
@@ -382,16 +378,16 @@ class Game:
 
     def random_placement(self, player: Player):
         if player == self.player_1:
-            ships_list = self.human_ships
+            ships_list = self.get_human_ships()
             board = self.board_1
         else:
-            ships_list = self.computer_ships
+            ships_list = self.get_computer_ships()
             board = self.board_2
 
         for ship in ships_list:
             orientation = random.choice(["v", "h"])
 
-            row, col = random.randint(0, 9), random.randint(0, 9)
+            row, col = random.randint(0, BOARD_SIZE - 1), random.randint(0, BOARD_SIZE - 1)
             while not self.ship_fits(
                 row=row,
                 col=col,
@@ -399,7 +395,7 @@ class Game:
                 ship=ship,
                 orientation=orientation,
             ):
-                row, col = random.randint(0, 9), random.randint(0, 9)
+                row, col = random.randint(0, BOARD_SIZE - 1), random.randint(0, BOARD_SIZE - 1)
 
             board.place_ship(
                 ship=ship,
@@ -416,7 +412,7 @@ class Game:
             self.log.write("  0 1 2 3 4 5 6 7 8 9 \t  0 1 2 3 4 5 6 7 8 9\n")
 
             last_row, last_col, player = last_hit if last_hit is not None else (None, None, None)
-            for i in range(10):
+            for i in range(BOARD_SIZE):
                 self.draw_board_row(
                     row=i,
                     board=self.board_1.get_inner_repr(),
@@ -476,7 +472,7 @@ class Game:
                     user_input[1] == " "
                 )
                 condition_2 = (
-                    self.board_2.get_outer_repr(int(user_input[0]), int(user_input[2])) == "O"
+                    self.board_2.get_outer_repr(int(user_input[0]), int(user_input[2])) == TileState.EMPTY
                 ) if condition_1 else False
 
                 while not condition_1 or not condition_2:
@@ -492,7 +488,7 @@ class Game:
                         user_input[1] == " "
                     )
                     condition_2 = (
-                        self.board_2.get_outer_repr(int(user_input[0]), int(user_input[2])) == "O"
+                        self.board_2.get_outer_repr(int(user_input[0]), int(user_input[2])) == TileState.EMPTY
                     ) if condition_1 else False
 
                 row, col = int(user_input[0]), int(user_input[2])
@@ -513,7 +509,7 @@ class Game:
                         random.shuffle(computer_current_targets)
 
                     row, col = computer_current_targets.pop()
-                    while not self.board_1.get_outer_repr(row, col) == "O":
+                    while not self.board_1.get_outer_repr(row, col) == TileState.EMPTY:
                         if computer_current_targets:
                             row, col = computer_current_targets.pop()
                         else:
@@ -529,24 +525,24 @@ class Game:
 
                         delta_row, delta_col = 1, 1
                         while row - delta_row >= 0 and delta_row <= 3:
-                            if defending_board.get_outer_repr(row - delta_row, col) != "O":
+                            if defending_board.get_outer_repr(row - delta_row, col) != TileState.EMPTY:
                                 break
                             up.append((row - delta_row, col))
                             delta_row += 1
-                        while col + delta_col <= 9 and delta_col <= 3:
-                            if defending_board.get_outer_repr(row, col + delta_col) != "O":
+                        while col + delta_col <= BOARD_SIZE - 1 and delta_col <= 3:
+                            if defending_board.get_outer_repr(row, col + delta_col) != TileState.EMPTY:
                                 break
                             right.append((row, col + delta_col))
                             delta_col += 1
 
                         delta_row, delta_col = 1, 1
-                        while row + delta_row <= 9 and delta_row <= 3:
-                            if defending_board.get_outer_repr(row + delta_row, col) != "O":
+                        while row + delta_row <= BOARD_SIZE - 1 and delta_row <= 3:
+                            if defending_board.get_outer_repr(row + delta_row, col) != TileState.EMPTY:
                                 break
                             down.append((row + delta_row, col))
                             delta_row += 1
                         while col - delta_col >= 0 and delta_col <= 3:
-                            if defending_board.get_outer_repr(row, col - delta_col) != "O":
+                            if defending_board.get_outer_repr(row, col - delta_col) != TileState.EMPTY:
                                 break
                             left.append((row, col - delta_col))
                             delta_col += 1
@@ -565,17 +561,17 @@ class Game:
                 print(f"{attacker_name} hit the ship ({row} {col})!")
                 self.log.write(f"{attacker_name} hit the ship ({row} {col})!\n")
                 defending_board.get_ships(row, col).lose_hp()
-                defending_board.set_inner_tile(row, col, "X")
-                defending_board.set_outer_tile(row, col, "X")
+                defending_board.set_inner_tile(row, col, TileState.HIT)
+                defending_board.set_outer_tile(row, col, TileState.HIT)
 
                 # prohibit tiles that are diagonal from the one that has been hit
                 for delta_row, delta_col in AROUND_SALTIRE:
                     if (
-                        0 <= row + delta_row <= 9 and
-                        0 <= col + delta_col <= 9 and
-                        defending_board.get_outer_repr(row + delta_row, col + delta_col) == "O"
+                        0 <= row + delta_row <= BOARD_SIZE - 1 and
+                        0 <= col + delta_col <= BOARD_SIZE - 1 and
+                        defending_board.get_outer_repr(row + delta_row, col + delta_col) == TileState.EMPTY
                     ):
-                        defending_board.set_outer_tile(row + delta_row, col + delta_col, "V")
+                        defending_board.set_outer_tile(row + delta_row, col + delta_col, TileState.SHADOW)
 
                 # prohibit terminal tiles and replace X to D if the ship has been destroyed
                 if ship.get_status() == "kia":
@@ -584,18 +580,18 @@ class Game:
 
                     ship_coordinates = ship.get_coordinates()
                     for r, c in ship_coordinates:  # avoid "row, col" naming to not allow the name conflict
-                        defending_board.set_inner_tile(r, c, "D")
-                        defending_board.set_outer_tile(r, c, "D")
+                        defending_board.set_inner_tile(r, c, TileState.DEAD)
+                        defending_board.set_outer_tile(r, c, TileState.DEAD)
 
                     ship_edges = (ship_coordinates[0], ship_coordinates[-1])
                     for r, c in ship_edges:
                         for delta_row, delta_col in AROUND_CROSS:
                             if (
-                                0 <= r + delta_row <= 9 and
-                                0 <= c + delta_col <= 9 and
-                                defending_board.get_outer_repr(r + delta_row, c + delta_col) == "O"
+                                0 <= r + delta_row <= BOARD_SIZE - 1 and
+                                0 <= c + delta_col <= BOARD_SIZE - 1 and
+                                defending_board.get_outer_repr(r + delta_row, c + delta_col) == TileState.EMPTY
                             ):
-                                defending_board.set_outer_tile(r + delta_row, c + delta_col, "V")
+                                defending_board.set_outer_tile(r + delta_row, c + delta_col, TileState.SHADOW)
 
                     # if computer, return to the pseudorandom shooting
                     if attacker == self.player_2 and is_seeking:
@@ -613,8 +609,8 @@ class Game:
             else:  # missed
                 print(f"{attacker_name} missed ({row} {col})")
                 self.log.write(f"{attacker_name} missed ({row} {col})\n")
-                defending_board.set_inner_tile(row, col, "M")
-                defending_board.set_outer_tile(row, col, "M")
+                defending_board.set_inner_tile(row, col, TileState.MISS)
+                defending_board.set_outer_tile(row, col, TileState.MISS)
                 players_order.reverse()
 
             last_hit = row, col, defending
